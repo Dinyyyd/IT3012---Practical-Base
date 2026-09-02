@@ -330,7 +330,10 @@ if __name__ == "__main__":
         height=12,
         num_food=15,
         num_opponents=0,
-        agent=SearchAgent(active_algo='BFS'),
+        agent=SearchAgent(
+            active_algo='AStar',
+            heuristic_type='manhattan'
+        )
     )
 
     root.mainloop()

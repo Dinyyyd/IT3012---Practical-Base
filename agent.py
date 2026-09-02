@@ -2,6 +2,7 @@
 import random
 from collections import deque
 import heapq
+import math
 
 
 class GreedyGridAgent:
@@ -145,14 +146,43 @@ class SearchAgent:
         ('Right', (1, 0))
     )
 
-    def __init__(self, active_algo='BFS'):
-        self.active_algo = active_algo
+    def __init__(
+        self,
+        active_algo='BFS',
+        heuristic_type='manhattan'
+    ):
+        self.active_algo = str(active_algo).upper()
+        self.heuristic_type = str(heuristic_type).lower()
         self.plan = []
+
+    def manhattan_distance(self, pos, goal):
+        """Estimate distance when movement is limited to four directions."""
+
+        return (
+            abs(pos[0] - goal[0])
+            + abs(pos[1] - goal[1])
+        )
+
+    def euclidean_distance(self, pos, goal):
+        """Calculate straight-line distance between two positions."""
+
+        return math.sqrt(
+            (pos[0] - goal[0]) ** 2
+            + (pos[1] - goal[1]) ** 2
+        )
 
     def _get_neighbors(self, position, walls, grid_size):
         """Generate valid action-state pairs from one grid position."""
 
+        if len(grid_size) != 2:
+            raise ValueError('grid_size must contain width and height')
+
         width, height = grid_size
+        if not isinstance(width, int) or not isinstance(height, int):
+            raise TypeError('grid_size values must be integers')
+        if width < 0 or height < 0:
+            raise ValueError('grid_size values must be non-negative')
+
         x, y = position
         neighbors = []
 
@@ -299,6 +329,99 @@ class SearchAgent:
 
         return None
 
+    def astar_search(
+        self,
+        start_pos,
+        goal_pos,
+        walls,
+        grid_size,
+        heuristic_type='manhattan'
+    ):
+        """A* graph search using f(n) = g(n) + h(n)."""
+
+        start = tuple(start_pos)
+        goal = tuple(goal_pos)
+        wall_set = {tuple(wall) for wall in walls}
+
+        heuristic_methods = {
+            'manhattan': self.manhattan_distance,
+            'euclidean': self.euclidean_distance
+        }
+
+        heuristic_name = heuristic_type.lower()
+
+        if heuristic_name not in heuristic_methods:
+            raise ValueError(
+                f"Unknown heuristic: {heuristic_type}"
+            )
+
+        heuristic = heuristic_methods[heuristic_name]
+
+        starting_g_cost = 0
+        starting_h_cost = heuristic(start, goal)
+        starting_f_cost = starting_g_cost + starting_h_cost
+
+        # Each entry is:
+        # (f_cost, g_cost, current_position, path_taken)
+        frontier = [
+            (
+                starting_f_cost,
+                starting_g_cost,
+                start,
+                []
+            )
+        ]
+
+        reached_states = set()
+        best_g_cost = {start: 0}
+
+        while frontier:
+            (
+                _f_cost,
+                current_g_cost,
+                current_pos,
+                path_taken
+            ) = heapq.heappop(frontier)
+
+            if current_pos in reached_states:
+                continue
+
+            if current_pos == goal:
+                return path_taken
+
+            reached_states.add(current_pos)
+
+            for action, next_pos in self._get_neighbors(
+                current_pos,
+                wall_set,
+                grid_size
+            ):
+                if next_pos in reached_states:
+                    continue
+
+                new_g_cost = current_g_cost + 1
+
+                if new_g_cost < best_g_cost.get(
+                    next_pos,
+                    float('inf')
+                ):
+                    best_g_cost[next_pos] = new_g_cost
+
+                    new_h_cost = heuristic(next_pos, goal)
+                    new_f_cost = new_g_cost + new_h_cost
+
+                    heapq.heappush(
+                        frontier,
+                        (
+                            new_f_cost,
+                            new_g_cost,
+                            next_pos,
+                            path_taken + [action]
+                        )
+                    )
+
+        return None
+
     def _run_selected_search(
         self,
         start_pos,
@@ -306,6 +429,15 @@ class SearchAgent:
         walls,
         grid_size
     ):
+        if self.active_algo in ('A*', 'ASTAR'):
+            return self.astar_search(
+                start_pos,
+                goal_pos,
+                walls,
+                grid_size,
+                heuristic_type=self.heuristic_type
+            )
+
         search_methods = {
             'BFS': self.bfs_search,
             'DFS': self.dfs_search,
