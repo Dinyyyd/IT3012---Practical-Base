@@ -35,6 +35,28 @@ class VisualGridHuntGame:
             if tuple(op_pos) != (0, 0) and tuple(op_pos) not in self.walls and tuple(op_pos) not in self.food_positions:
                 self.opponents.append(op_pos)
 
+        # Generate toxic traps in currently unoccupied cells
+        self.toxic_traps = set()
+
+        occupied_cells = (
+            self.walls
+            | self.food_positions
+            | {tuple(opponent) for opponent in self.opponents}
+            | {(0, 0)}
+        )
+
+        available_cells = [
+            (x, y)
+            for x in range(self.width)
+            for y in range(self.height)
+            if (x, y) not in occupied_cells
+        ]
+
+        num_traps = min(5, len(available_cells))
+        self.toxic_traps.update(
+            random.sample(available_cells, num_traps)
+        )
+
         self.score = 0
         self.steps = 0
         self.collision = False
@@ -44,6 +66,7 @@ class VisualGridHuntGame:
             'agent_pos': list(self.agent_pos),
             'opponent_positions': [list(op) for op in self.opponents],
             'smells_food': tuple(self.agent_pos) in self.food_positions,
+            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps,
             'hit_wall': tuple(self.agent_pos) in self.walls,
             'collision': self.collision,
             'score': self.score,
@@ -69,6 +92,10 @@ class VisualGridHuntGame:
             self.agent_pos = new_pos
 
         tuple_pos = tuple(self.agent_pos)
+
+        if tuple_pos in self.toxic_traps:
+            self.score -= 15
+
         if tuple_pos in self.food_positions:
             self.food_positions.remove(tuple_pos)
             self.score += 20
@@ -139,6 +166,28 @@ class GridGameGUI:
                     self.canvas.create_text(x1 + self.cell_size / 2, y1 + self.cell_size / 2, text="W", fill="white",
                                             font=("Arial", 8, "bold"))
 
+        for tx, ty in self.env.toxic_traps:
+            center_x = tx * self.cell_size + self.cell_size / 2
+            center_y = (
+                (self.env.height - 1 - ty) * self.cell_size
+                + self.cell_size / 2
+            )
+            radius = self.cell_size * 0.25
+
+            self.canvas.create_polygon(
+                center_x,
+                center_y - radius,
+                center_x + radius,
+                center_y,
+                center_x,
+                center_y + radius,
+                center_x - radius,
+                center_y,
+                fill="#7e22ce",
+                outline="#581c87",
+                width=2,
+            )
+
         for fx, fy in self.env.food_positions:
             offset = self.cell_size * 0.25
             x1 = fx * self.cell_size + offset
@@ -177,6 +226,8 @@ class GridGameGUI:
                 self.btn.config(state="normal")
 
         step()
+
+        
 
 
 if __name__ == "__main__":
