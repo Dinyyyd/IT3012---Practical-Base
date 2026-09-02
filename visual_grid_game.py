@@ -1,6 +1,6 @@
 import random
 import tkinter as tk
-from agent import SimpleReflexAgent, ModelBasedAgent
+from agent import SimpleReflexAgent, ModelBasedAgent, SearchAgent
 
 
 class VisualGridHuntGame:
@@ -18,13 +18,22 @@ class VisualGridHuntGame:
         self.agent_facing = 'Up'
 
         if custom_walls is not None:
-            self.walls = {
-                tuple(wall) for wall in custom_walls
-                if len(wall) == 2
-                and 0 <= wall[0] < width
-                and 0 <= wall[1] < height
-                and tuple(wall) != (0, 0)
-            }
+            self.walls = set()
+            for wall in custom_walls:
+                try:
+                    if len(wall) != 2:
+                        continue
+                    x, y = wall
+                except (TypeError, ValueError):
+                    continue
+                if (
+                    isinstance(x, int)
+                    and isinstance(y, int)
+                    and 0 <= x < width
+                    and 0 <= y < height
+                    and (x, y) != (0, 0)
+                ):
+                    self.walls.add((x, y))
         else:
             # Generate some default scattered walls for a larger grid
             self.walls = {
@@ -129,6 +138,32 @@ class VisualGridHuntGame:
         }
         if action in turns:
             self.agent_facing = turns[action][self.agent_facing]
+
+        elif action in ('Up', 'Down', 'Left', 'Right'):
+            direction_changes = {
+                'Up': (0, 1),
+                'Down': (0, -1),
+                'Left': (-1, 0),
+                'Right': (1, 0)
+            }
+
+            dx, dy = direction_changes[action]
+            new_x = self.agent_pos[0] + dx
+            new_y = self.agent_pos[1] + dy
+
+            valid_position = (
+                0 <= new_x < self.width
+                and 0 <= new_y < self.height
+                and (new_x, new_y) not in self.walls
+            )
+
+            if valid_position:
+                self.agent_pos = [new_x, new_y]
+                self.agent_facing = action
+                moved = True
+            else:
+                self.score -= 5
+
         elif action == 'MoveForward':
             new_x, new_y = self.get_cell_ahead()
             if (
@@ -145,11 +180,22 @@ class VisualGridHuntGame:
             if current_pos in self.food_positions:
                 self.food_positions.remove(current_pos)
                 self.score += 20
+
+        elif action == 'NoOp':
+            pass  # Do nothing
+
         else:
             raise ValueError(f"Unknown action: {action}")
 
         if moved and tuple(self.agent_pos) in self.toxic_traps:
             self.score -= 15
+
+        # Check for a collision before moving opponents as well as after they move.
+        # This catches the case where the agent moves onto an opponent.
+        if any(opponent == self.agent_pos for opponent in self.opponents):
+            self.score -= 50
+            self.collision = True
+
         for opponent in self.opponents:
             move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
             candidate = list(opponent)
@@ -250,6 +296,8 @@ class GridGameGUI:
             if not self.env.is_done():
                 percept = self.env.get_percept()
                 action = self.agent.sense_and_act(percept)
+                if not isinstance(action, str):
+                    raise ValueError('Agent must return an action string')
                 self.env.execute_action(action)
 
                 self.draw_grid()
@@ -272,6 +320,8 @@ class GridGameGUI:
         step()
 
 if __name__ == "__main__":
+    random.seed(7)
+
     root = tk.Tk()
     # Try a larger grid size like 12x12 with 15 food and 3 opponents!
     app = GridGameGUI(
@@ -280,7 +330,7 @@ if __name__ == "__main__":
         height=12,
         num_food=15,
         num_opponents=0,
-        agent=ModelBasedAgent(),
+        agent=SearchAgent(active_algo='BFS'),
     )
 
     root.mainloop()
