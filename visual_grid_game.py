@@ -107,9 +107,17 @@ class VisualGridHuntGame:
         )
 
         return {
+            # Local information retained from Practical 2
             'wall_ahead': wall_ahead,
             'food_here': tuple(self.agent_pos) in self.food_positions,
             'smells_toxin': tuple(self.agent_pos) in self.toxic_traps,
+
+            # Global search model required by Practical 3
+            'agent_pos': list(self.agent_pos),
+            'grid_size': (self.width, self.height),
+            'walls': list(self.walls),
+            'all_food': list(self.food_positions),
+            'remaining_food': len(self.food_positions)
         }
 
     def execute_action(self, action: str):
